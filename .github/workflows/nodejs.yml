@@ -40,10 +40,10 @@ jobs:
         run: npm ci
 
       - name: Run Lint
-        run: npm run lint --if-present
+        run: npm run lint
 
       - name: Run Tests
-        run: npm test --if-present
+        run: npm test
 
       - name: Build Application
-        run: npm run build --if-present
+        run: npm run build
