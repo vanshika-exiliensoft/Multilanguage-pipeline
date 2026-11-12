@@ -1,0 +1,39 @@
+
+name: Java CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend-java/**'
+      - '.github/workflows/java.yml'
+
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend-java/**'
+      - '.github/workflows/java.yml'
+
+  workflow_dispatch:
+
+jobs:
+  java-build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend-java
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build Application
+        run: mvn -B clean package
