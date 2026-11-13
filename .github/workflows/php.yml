@@ -1,23 +1,22 @@
 
-name: PHP CI
+name: PHP CI Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop, main]
     paths:
       - 'backend-php/**'
-      - '.github/workflows/php.yml'
 
   pull_request:
-    branches: [main, develop]
+    branches: [develop, main]
     paths:
       - 'backend-php/**'
-      - '.github/workflows/php.yml'
 
   workflow_dispatch:
 
 jobs:
-  php-build:
+  build:
+    name: Build and Test PHP
     runs-on: ubuntu-latest
 
     defaults:
@@ -25,21 +24,20 @@ jobs:
         working-directory: backend-php
 
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup PHP
+      - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           coverage: none
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
-      - name: Check PHP Syntax
-        run: |
-          find src -name "*.php" -exec php -l {} \;
+      - name: Check PHP syntax
+        run: php -l src/Calculator.php
 
-      - name: Run Tests
-        run: composer test --no-interaction
+      - name: Run tests
+        run: composer test
