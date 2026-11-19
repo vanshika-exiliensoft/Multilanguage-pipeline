@@ -186,9 +186,10 @@ jobs:
 
       - name: Run Tests
         run: |
-          if [ -f vendor/bin/phpunit ]; then
-            php vendor/bin/phpunit
+          if [ -f vendor/bin/phpunit ] && [ -d tests ]; then
+            php vendor/bin/phpunit tests/
           else
+            echo "PHPUnit or tests directory not found."
             find . -path ./vendor -prune -o \
               -name '*.php' -type f \
               -exec php -l {} \;
