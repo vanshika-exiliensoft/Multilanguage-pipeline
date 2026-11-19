@@ -1,0 +1,187 @@
+name: Multilanguage CI 
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+  pull request:
+    branches:
+      - main
+      - develop
+
+# Cancel older runs in the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{github.ref}}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+# Detect changes
+  changes:
+    name: Detect changed language
+    runs-on: ubuntu-latest
+
+    outputs:
+      node: ${{ steps.filter.outputs.node }}
+      python: ${{ steps.filter.outputs.python }}
+      java: ${{ steps.filter.outputs.java }}
+      php: ${{ steps.filter.outputs.php }}
+      security: ${{ steps.filter.outputs.security }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed file
+        uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            node:
+              - 'frontend-nodejs/**
+
+            python:
+              - 'backend-python/**'
+
+            java:
+              - 'backend-java/**'
+
+            php:
+              - 'backend-php/**'
+
+            security:
+              - 'frontend-nodejs/**
+              - 'backend-python/**'
+              - 'backend-java/**'
+              - 'backend-php/**'
+              - '.trivyignore'
+              - '.github/workflows/**'
+          
+# Node.js ci
+nodejs:
+  needs: changes
+  if: needs.changes.outputs.node == 'true'
+  runs-on: ubuntu-latest
+  defaults:
+    run:
+      working-directory: frontend-nodejs
+
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend-nodejs/package-lock.json
+
+    - run: npm ci
+    - run: npm test --if-present
+    - run: npm run build --if-present
+
+# Python ci
+python:
+  needs: changes
+  if: needs.changes.outputs.python == 'true'
+  runs-on: ubuntu-latest
+  defaults:
+    run:
+      working-directory: backend-python
+
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+        cache-dependency-path: backend-python/requirements.txt
+
+    - run: pip install -r requirements.txt
+    - run: |
+          if [ -d tests ]; then
+            pip install pytest
+            pytest
+          else
+            python -m compileall .
+          fi
+
+# Java ci
+java:
+  needs: changes
+  if: needs.changes.outputs.java == 'true'
+  runs-on: ubuntu-latest
+  defaults:
+    run:
+      working-directory: backend-java
+
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '20'
+        cache: maven
+
+    - run: mvn -B verify
+
+# PHP ci
+php:
+  needs: changes
+  if: needs.changes.outputs.php == 'true'
+  runs-on: ubuntu-latest
+  defaults:
+    run:
+      working-directory: backend-php
+
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        tools: composer
+
+    - name: Install dependencies
+      run: composer install --no-interaction --prefer-dist
+
+    - name: Run tests
+      run: |
+        if [ -f vendor/bin/phpunit ]; then
+          vendor/bin/phpunit
+        else
+          find . -path ./vendor -prune -o \
+            -name '*.php' -type f \
+            -exec php -l {} \;
+        fi
+
+# Trivy scan
+trivy:
+ name: Trivy security scan
+  needs: changes
+  if: needs.changes.outputs.security == 'true'
+  runs-on: ubuntu-latest
+
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Trivy file system security scan
+      uses: aquasecurity/trivy-action@0.33.1
+      with:
+        scan-type: fs 
+        scan-ref: .
+        scanners: vuln,misconfig,secret
+        severity: CRITICAL,HIGH
+        ignore-unfixed: true
+        exit-code: '1'
+        trivyignores: .trivyignore
