@@ -187,7 +187,7 @@ jobs:
       - name: Run Tests
         run: |
           if [ -f vendor/bin/phpunit ]; then
-            vendor/bin/phpunit
+            php vendor/bin/phpunit
           else
             find . -path ./vendor -prune -o \
               -name '*.php' -type f \
