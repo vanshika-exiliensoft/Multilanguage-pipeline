@@ -1,0 +1,246 @@
+
+name: Multi-Language CI/CD Pipeline
+
+#Pipeline parameters
+
+on:
+  push:
+    branches: [main, develop]
+
+  pull_request:
+    branches: [main, develop]
+
+  workflow_dispatch:
+
+env:
+  LANGUAGE: nodejs
+  VERSION: '22'
+  APP_DIR: ./app
+
+  INSTALL_COMMAND: npm ci
+  BUILD_COMMAND: npm run build
+  TEST_COMMAND: npm test
+
+  ENABLE_DEPLOY: 'true'
+
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: asia-south1
+  ARTIFACT_REGISTRY: application-repo
+  CLOUD_RUN_SERVICE: nodejs-application
+
+  WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+  WIF_SERVICE_ACCOUNT: ${{ vars.GCP_WIF_SERVICE_ACCOUNT }}
+
+#Permissions
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+
+# Validate parameters
+
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate parameters
+        run: |
+          set -euo pipefail
+
+          case "$LANGUAGE" in
+            nodejs|python|java)
+              echo "Supported language: $LANGUAGE"
+              ;;
+            *)
+              echo "Unsupported language"
+              exit 1
+              ;;
+          esac
+
+          if [ ! -d "$APP_DIR" ]; then
+            echo "Application directory not found"
+            exit 1
+          fi
+
+          echo "Parameters validated successfully"
+
+#Setup language and build
+  build:
+    name: Build and Test
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node.js
+
+      - name: Setup Node.js
+        if: env.LANGUAGE == 'nodejs'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.VERSION }}
+
+      # Python
+
+      - name: Setup Python
+        if: env.LANGUAGE == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.VERSION }}
+
+      # Java
+
+      - name: Setup Java
+        if: env.LANGUAGE == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.VERSION }}
+
+      - name: Verify runtime
+        run: |
+          case "$LANGUAGE" in
+            nodejs) node --version ;;
+            python) python --version ;;
+            java) java -version ;;
+          esac
+
+      - name: Install dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: bash -euo pipefail -c "$INSTALL_COMMAND"
+
+      - name: Build application
+        working-directory: ${{ env.APP_DIR }}
+        run: bash -euo pipefail -c "$BUILD_COMMAND"
+
+      - name: Run tests
+        working-directory: ${{ env.APP_DIR }}
+        run: bash -euo pipefail -c "$TEST_COMMAND"
+
+#Security scan
+
+  security:
+    name: Security Scan
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: fs
+          scan-ref: ${{ env.APP_DIR }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+#Build Docker Image
+
+  docker:
+    name: Build and Scan Docker Image
+    needs: security
+    runs-on: ubuntu-latest
+
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t "$CLOUD_RUN_SERVICE:$GITHUB_SHA" \
+            "$APP_DIR"
+
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: image
+          image-ref: ${{ env.CLOUD_RUN_SERVICE }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+      - name: Save Docker image
+        run: |
+          docker save \
+            "$CLOUD_RUN_SERVICE:$GITHUB_SHA" \
+            -o "$RUNNER_TEMP/image.tar"
+
+      - name: Upload Docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-image
+          path: ${{ runner.temp }}/image.tar
+          retention-days: 1
+
+#Deploy to GCP using WIF
+
+  deploy:
+    name: GCP Deployment
+    needs: docker
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: application-image
+          path: ${{ runner.temp }}
+
+      - name: Load Docker image
+        run: |
+          docker load -i "$RUNNER_TEMP/image.tar"
+
+      # WIF Authentication
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: |
+          gcloud auth configure-docker \
+            "$GCP_REGION-docker.pkg.dev" --quiet
+
+      - name: Tag Docker image
+        run: |
+          docker tag \
+            "$CLOUD_RUN_SERVICE:$GITHUB_SHA" \
+            "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REGISTRY/$CLOUD_RUN_SERVICE:$GITHUB_SHA"
+
+      - name: Push image to Artifact Registry
+        run: |
+          docker push \
+            "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REGISTRY/$CLOUD_RUN_SERVICE:$GITHUB_SHA"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --image="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REGISTRY/$CLOUD_RUN_SERVICE:$GITHUB_SHA" \
+            --region="$GCP_REGION" \
+            --project="$GCP_PROJECT_ID" \
+            --platform=managed \
+            --quiet
+
+      - name: Deployment completed
+        run: echo "Deployment successful"
