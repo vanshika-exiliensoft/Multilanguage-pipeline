@@ -162,7 +162,7 @@ jobs:
             "$APP_DIR"
 
       - name: Scan Docker image
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           scan-type: image
           image-ref: ${{ env.CLOUD_RUN_SERVICE }}:${{ github.sha }}
