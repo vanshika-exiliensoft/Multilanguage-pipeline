@@ -14,7 +14,7 @@ on:
 env:
   LANGUAGE: nodejs
   VERSION: '22'
-  APP_DIR: ./app
+  APP_DIR: ./frontend-nodejs
 
   INSTALL_COMMAND: npm ci
   BUILD_COMMAND: npm run build
