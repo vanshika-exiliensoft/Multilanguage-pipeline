@@ -1,0 +1,80 @@
+name: Language Detection
+description: Detect the application language from project files.
+
+inputs:
+  app-directory:
+    description: Application directory.
+    required: true
+    default: "."
+
+  language:
+    description: The language of the application.
+    required: false
+    default: auto
+
+outputs:
+  language:
+    description: Detected application language.
+    value: ${{ steps.detect.outputs.language }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect application language
+      shell: bash
+      env:
+        APP_DIRECTORY: ${{ inputs.app_directory }}
+        LANGUAGE: ${{ inputs.language }}
+      run: |
+        set -euo pipefail
+
+        if [ ! -d "$APP_DIR" ]; then
+          echo "Application directory not found"
+          exit 1
+        fi
+
+        if [ "$LANGUAGE" != "auto" ]; then
+          case "$LANGUAGE" in
+            nodejs|python|java|php)
+              DETECTED_LANGUAGE="$LANGUAGE"
+              ;;
+            *)
+              echo "Unsupported language: $LANGUAGE"
+              exit 1
+              ;;
+          esac
+        else
+          declare -a LANGUAGES=()
+
+          [ -f "$APP_DIR/package.json" ] && LANGUAGES+=("nodejs")
+
+          if [ -f "$APP_DIR/requirements.txt" ] || \
+             [ -f "$APP_DIR/pyproject.toml" ] || \
+             [ -f "$APP_DIR/setup.py" ]; then
+            LANGUAGES+=("python")
+          fi
+
+          if [ -f "$APP_DIR/pom.xml" ] || \
+             [ -f "$APP_DIR/build.gradle" ] || \
+             [ -f "$APP_DIR/build.gradle.kts" ]; then
+            LANGUAGES+=("java")
+          fi
+
+          [ -f "$APP_DIR/composer.json" ] && LANGUAGES+=("php")
+
+          if [ "${#LANGUAGES[@]}" -eq 0 ]; then
+            echo "Unable to detect language"
+            exit 1
+          fi
+
+          if [ "${#LANGUAGES[@]}" -gt 1 ]; then
+            echo "Multiple languages detected: ${LANGUAGES[*]}"
+            echo "Specify the language manually."
+            exit 1
+          fi
+
+          DETECTED_LANGUAGE="${LANGUAGES[0]}"
+        fi
+
+        echo "Detected language: $DETECTED_LANGUAGE"
+        echo "language=$DETECTED_LANGUAGE" >> "$GITHUB_OUTPUT"

@@ -1,8 +1,0 @@
-
-# Trivy vulnerability exceptions
-#
-# Add vulnerability IDs here only after security review.
-# Example format:
-# CVE-2024-12345
-#
-# Document the reason and review date for every exception.

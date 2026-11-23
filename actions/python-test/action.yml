@@ -1,0 +1,63 @@
+name: Python test
+description: Install, build and test Python application
+
+inputs:
+  version:
+    description: Python version.
+    required: true
+
+  app-directory:
+    description: Application directory.
+    required: true
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.version }}
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.app-directory }}
+      run: |
+        set -euo pipefail
+
+        python -m pip install --upgrade pip
+
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
+
+        if [ -f pyproject.toml ] || [ -f setup.py ]; then
+          pip install -e .
+        fi
+
+        pip install pytest
+
+    - name: Python syntax validation
+      shell: bash
+      working-directory: ${{ inputs.app-directory }}
+      run: |
+        set -euo pipefail
+
+        python -m compileall -q .
+
+    - name: Run python test
+      shell: bash
+      working-directory: ${{ inputs.app-directory }}
+      run: |
+        set -euo pipefail
+
+        if ! find . -type f \
+          \( -name 'test_*.py' -o -name '*_test.py' \) \
+          -not -path './.venv/*' \
+          -not -path './venv/*' \
+          -not -path './.git/*' | grep -q .; then
+          echo "No Python test files found"
+          exit 1
+        fi
+
+        pytest -v

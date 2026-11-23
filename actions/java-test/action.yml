@@ -1,0 +1,50 @@
+name: Java test
+description: Install, build and test Java application
+
+inputs:
+  version:
+    description: Java version.
+    required: true
+
+  app-directory:
+    description: Application directory.
+    required: true
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.version }}
+
+    - name: Build and test
+      shell: bash
+      working-directory: ${{ inputs.app-directory }}
+      run: |
+        set -euo pipefail
+
+        if [ -f pom.xml ]; then
+
+          echo "Maven project detected"
+
+          if [ -f mvnw ]; then
+            chmod +x mvnw
+            ./mvnw clean verify
+          else
+            mvn clean verify
+          fi
+
+        elif [ -f gradlew ]; then
+
+          echo "Gradle project detected"
+
+          chmod +x gradlew
+          ./gradlew build
+
+        else
+          echo "No supported Maven or Gradle configuration found"
+          exit 1
+        fi
