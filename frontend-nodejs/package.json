@@ -5,7 +5,8 @@
   "description": "Sample Node.js application for multi-language CI/CD pipeline",
   "main": "src/index.js",
   "scripts": {
-    "test": "node --test tests/*.test.js",
+    "start": "node src/index.js",
+    "test": "node --test",
     "lint": "node --check src/index.js",
     "build": "node --check src/index.js"
   }

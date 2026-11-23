@@ -1,23 +1,13 @@
 
-function add(a, b) {
-    return a + b;
-}
+const http = require("http");
 
-function subtract(a, b) {
-    return a - b;
-}
+const PORT = process.env.PORT || 3000;
 
-function multiply(a, b) {
-    return a * b;
-}
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Node.js application deployed successfully on GCP Cloud Run!");
+});
 
-function greet(name) {
-    return `Hello, ${name}! Welcome to Node.js CI/CD.`;
-}
-
-module.exports = {
-    add,
-    subtract,
-    multiply,
-    greet
-};
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});

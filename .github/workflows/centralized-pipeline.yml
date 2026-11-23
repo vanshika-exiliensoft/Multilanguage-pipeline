@@ -19,6 +19,7 @@ env:
   INSTALL_COMMAND: npm ci
   BUILD_COMMAND: npm run build
   TEST_COMMAND: npm test
+  START_COMMAND: npm start
 
   ENABLE_DEPLOY: 'true'
 
@@ -29,6 +30,7 @@ env:
 
   WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
   WIF_SERVICE_ACCOUNT: ${{ vars.GCP_WIF_SERVICE_ACCOUNT }}
+  RUNTIME_SA: cloud-run-runtime@gcp-devops-learning-514912.iam.gserviceaccount.com
 
 #Permissions
 
@@ -158,7 +160,11 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
+            --build-arg LANGUAGE="$LANGUAGE" \
+            --build-arg VERSION="$VERSION" \
+            --build-arg START_COMMAND="$START_COMMAND" \
             -t "$CLOUD_RUN_SERVICE:$GITHUB_SHA" \
+            -f Dockerfile \
             "$APP_DIR"
 
       - name: Scan Docker image
@@ -189,6 +195,11 @@ jobs:
     name: GCP Deployment
     needs: docker
     runs-on: ubuntu-latest
+
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      vars.ENABLE_DEPLOY == 'true'
 
     permissions:
       contents: read
@@ -239,6 +250,7 @@ jobs:
             --region="$GCP_REGION" \
             --project="$GCP_PROJECT_ID" \
             --platform=managed \
+            --service-account="$RUNTIME_SA"
             --quiet
 
       - name: Deployment completed
