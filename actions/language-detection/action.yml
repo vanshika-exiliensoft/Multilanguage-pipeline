@@ -1,79 +1,68 @@
+
 name: Language Detection
-description: Detect the application language from project files.
+description: Detect application language automatically
 
 inputs:
-  app-directory:
-    description: Application directory.
-    required: true
-    default: "."
-
   language:
-    description: The language of the application.
+    description: Application language
     required: false
     default: auto
 
+  app_directory:
+    description: Application directory
+    required: false
+    default: "."
+
 outputs:
   language:
-    description: Detected application language.
+    description: Detected application language
     value: ${{ steps.detect.outputs.language }}
 
 runs:
   using: composite
   steps:
     - name: Detect application language
+      id: detect
       shell: bash
       env:
-        APP_DIRECTORY: ${{ inputs.app_directory }}
+        APP_DIR: ${{ inputs.app_directory }}
         LANGUAGE: ${{ inputs.language }}
       run: |
         set -euo pipefail
 
-        if [ ! -d "$APP_DIR" ]; then
-          echo "Application directory not found"
+        echo "Application directory: $APP_DIR"
+
+        if [[ ! -d "$APP_DIR" ]]; then
+          echo "Application directory does not exist: $APP_DIR"
           exit 1
         fi
 
-        if [ "$LANGUAGE" != "auto" ]; then
-          case "$LANGUAGE" in
-            nodejs|python|java|php)
-              DETECTED_LANGUAGE="$LANGUAGE"
-              ;;
-            *)
-              echo "Unsupported language: $LANGUAGE"
-              exit 1
-              ;;
-          esac
+        cd "$APP_DIR"
+
+        if [[ "$LANGUAGE" != "auto" ]]; then
+          DETECTED_LANGUAGE="$LANGUAGE"
         else
-          declare -a LANGUAGES=()
+          DETECTED_LANGUAGE=""
 
-          [ -f "$APP_DIR/package.json" ] && LANGUAGES+=("nodejs")
+          [[ -f package.json ]] && DETECTED_LANGUAGE="${DETECTED_LANGUAGE} nodejs"
+          [[ -f requirements.txt || -f pyproject.toml || -f setup.py ]] && DETECTED_LANGUAGE="${DETECTED_LANGUAGE} python"
+          [[ -f pom.xml || -f build.gradle || -f build.gradle.kts ]] && DETECTED_LANGUAGE="${DETECTED_LANGUAGE} java"
+          [[ -f composer.json ]] && DETECTED_LANGUAGE="${DETECTED_LANGUAGE} php"
 
-          if [ -f "$APP_DIR/requirements.txt" ] || \
-             [ -f "$APP_DIR/pyproject.toml" ] || \
-             [ -f "$APP_DIR/setup.py" ]; then
-            LANGUAGES+=("python")
-          fi
+          DETECTED_LANGUAGE=$(echo "$DETECTED_LANGUAGE" | xargs)
 
-          if [ -f "$APP_DIR/pom.xml" ] || \
-             [ -f "$APP_DIR/build.gradle" ] || \
-             [ -f "$APP_DIR/build.gradle.kts" ]; then
-            LANGUAGES+=("java")
-          fi
-
-          [ -f "$APP_DIR/composer.json" ] && LANGUAGES+=("php")
-
-          if [ "${#LANGUAGES[@]}" -eq 0 ]; then
-            echo "Unable to detect language"
+          if [[ -z "$DETECTED_LANGUAGE" ]]; then
+            echo "No supported language detected."
             exit 1
           fi
 
-          if [ "${#LANGUAGES[@]}" -gt 1 ]; then
-            echo "Multiple languages detected: ${LANGUAGES[*]}"
-            echo "Specify the language manually."
+          LANGUAGE_COUNT=$(echo "$DETECTED_LANGUAGE" | wc -w)
+
+          if [[ "$LANGUAGE_COUNT" -gt 1 ]]; then
+            echo "Multiple languages detected: $DETECTED_LANGUAGE"
+            echo "Please specify the language manually."
             exit 1
           fi
-
-          DETECTED_LANGUAGE="${LANGUAGES[0]}"
         fi
 
         echo "Detected language: $DETECTED_LANGUAGE"
