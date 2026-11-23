@@ -62,7 +62,7 @@ jobs:
 
       - name: Detect language
         id: detect
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/language-detection@main
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/language-detection@develop
         with:
           app-directory: ${{ inputs.app-directory }}
           language: ${{ inputs.language }}
@@ -78,21 +78,21 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build and test
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/language-detection@main
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/language-detection@develop
         with:
           version: ${{ inputs.version }}
           app-directory: ${{ inputs.app-directory }}
 
       - name: Run Python Tests
         if: needs.detect.outputs.language == 'python'
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/python-test@main
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/python-test@develop
         with:
           version: ${{ inputs.version }}
           app_directory: ${{ inputs.app-directory }}
 
       - name: Run Java Tests
         if: needs.detect.outputs.language == 'java'
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/java-test@main
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/java-test@develop
         with:
           version: ${{ inputs.version }}
           app_directory: ${{ inputs.app-directory }}
