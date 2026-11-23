@@ -4,22 +4,40 @@ on:
   workflow_call:
     inputs:
       language:
-        description: Language to test.
+        description: "Application programming language"
         required: false
-        default: auto
         type: string
+        default: "auto"
 
-      version:
-        description: "Language version"
+      app_directory:
+        description: "Application source directory"
+        required: false
+        type: string
+        default: "."
+
+      node_version:
+        description: "Node.js version"
         required: false
         type: string
         default: "22"
 
-      app-directory:
-        description: Application directory.
+      python_version:
+        description: "Python version"
         required: false
-        default: "."
         type: string
+        default: "3.12"
+
+      java_version:
+        description: "Java version"
+        required: false
+        type: string
+        default: "17"
+
+      php_version:
+        description: "PHP version"
+        required: false
+        type: string
+        default: "8.3"
 
     outputs:
       detected_language:
