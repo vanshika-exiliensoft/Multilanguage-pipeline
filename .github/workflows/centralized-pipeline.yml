@@ -1,16 +1,17 @@
+
 name: Centralized Multi-Language Pipeline
 
 on:
   workflow_call:
     inputs:
       language:
-        description: "Application programming language"
+        description: "Application language: auto, nodejs, python, java, php"
         required: false
         type: string
         default: "auto"
 
       app_directory:
-        description: "Application source directory"
+        description: "Application directory"
         required: false
         type: string
         default: "."
@@ -46,60 +47,107 @@ on:
 
 permissions:
   contents: read
-  
 
 jobs:
+
+  # --------------------------------
+  # JOB 1: DETECT APPLICATION LANGUAGE
+  # --------------------------------
+
   detect:
     name: Detect Application Language
     runs-on: ubuntu-latest
 
     outputs:
-      language: ${{ steps.detect.outputs.language }}
+      language: ${{ steps.detect-language.outputs.language }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Application Repository
         uses: actions/checkout@v4
 
-      - name: Detect language
-        id: detect
+      - name: Detect application language
+        id: detect-language
         uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/language-detection@develop
         with:
-          app-directory: ${{ inputs.app-directory }}
           language: ${{ inputs.language }}
+          app_directory: ${{ inputs.app_directory }}
 
-  test:
-    name: Build and test
-    runs-on: ubuntu-latest
+  # --------------------------------
+  # JOB 2: NODE.JS BUILD AND TEST
+  # --------------------------------
+
+  nodejs-test:
+    name: Node.js Build and Test
     needs: detect
+    if: needs.detect.outputs.language == 'nodejs'
+    runs-on: ubuntu-latest
 
-    if: needs.detect.outputs.language != ''
     steps:
-      - name: Checkout repository
+      - name: Checkout Application Repository
         uses: actions/checkout@v4
 
-      - name: Build and test
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/language-detection@develop
+      - name: Run Node.js Tests
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/nodejs-test@develop
         with:
-          version: ${{ inputs.version }}
-          app-directory: ${{ inputs.app-directory }}
+          node_version: ${{ inputs.node_version }}
+          app_directory: ${{ inputs.app_directory }}
+
+  # --------------------------------
+  # JOB 3: PYTHON BUILD AND TEST
+  # --------------------------------
+
+  python-test:
+    name: Python Build and Test
+    needs: detect
+    if: needs.detect.outputs.language == 'python'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Application Repository
+        uses: actions/checkout@v4
 
       - name: Run Python Tests
-        if: needs.detect.outputs.language == 'python'
         uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/python-test@develop
         with:
-          version: ${{ inputs.version }}
-          app_directory: ${{ inputs.app-directory }}
+          python_version: ${{ inputs.python_version }}
+          app_directory: ${{ inputs.app_directory }}
+
+  # --------------------------------
+  # JOB 4: JAVA BUILD AND TEST
+  # --------------------------------
+
+  java-test:
+    name: Java Build and Test
+    needs: detect
+    if: needs.detect.outputs.language == 'java'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Application Repository
+        uses: actions/checkout@v4
 
       - name: Run Java Tests
-        if: needs.detect.outputs.language == 'java'
         uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/java-test@develop
         with:
-          version: ${{ inputs.version }}
-          app_directory: ${{ inputs.app-directory }}
+          java_version: ${{ inputs.java_version }}
+          app_directory: ${{ inputs.app_directory }}
 
-      - name: Pipeline Completed
-        run: |
-          echo "Multi-language Pipeline Successful"
-          echo "Language: ${{ needs.detect.outputs.language }}"
-          
+  # --------------------------------
+  # JOB 5: PHP BUILD AND TEST
+  # --------------------------------
 
+  php-test:
+    name: PHP Build and Test
+    needs: detect
+    if: needs.detect.outputs.language == 'php'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Application Repository
+        uses: actions/checkout@v4
+
+      - name: Run PHP Tests
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/php-test@develop
+        with:
+          php_version: ${{ inputs.php_version }}
+          app_directory: ${{ inputs.app_directory }}

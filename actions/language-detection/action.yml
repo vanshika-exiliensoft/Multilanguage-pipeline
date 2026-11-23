@@ -1,21 +1,21 @@
 
 name: Language Detection
-description: Detect application language automatically
+description: Automatically detect Node.js, Python, Java, or PHP application
 
 inputs:
   language:
-    description: Application language
+    description: "Application language (auto, nodejs, python, java, php)"
     required: false
-    default: auto
+    default: "auto"
 
   app_directory:
-    description: Application directory
+    description: "Directory containing the application source code"
     required: false
     default: "."
 
 outputs:
   language:
-    description: Detected application language
+    description: "Detected application language"
     value: ${{ steps.detect.outputs.language }}
 
 runs:
@@ -26,44 +26,85 @@ runs:
       shell: bash
       env:
         APP_DIR: ${{ inputs.app_directory }}
-        LANGUAGE: ${{ inputs.language }}
+        INPUT_LANGUAGE: ${{ inputs.language }}
       run: |
         set -euo pipefail
 
+        echo "Starting language detection..."
         echo "Application directory: $APP_DIR"
 
+        # Verify application directory
         if [[ ! -d "$APP_DIR" ]]; then
-          echo "Application directory does not exist: $APP_DIR"
+          echo "ERROR: Application directory does not exist: $APP_DIR"
           exit 1
         fi
 
+        # Move into application directory
         cd "$APP_DIR"
 
-        if [[ "$LANGUAGE" != "auto" ]]; then
-          DETECTED_LANGUAGE="$LANGUAGE"
+        # Validate manual language selection
+        case "$INPUT_LANGUAGE" in
+          auto|nodejs|python|java|php)
+            ;;
+          *)
+            echo "ERROR: Unsupported language: $INPUT_LANGUAGE"
+            echo "Supported languages: auto, nodejs, python, java, php"
+            exit 1
+            ;;
+        esac
+
+        if [[ "$INPUT_LANGUAGE" != "auto" ]]; then
+          DETECTED_LANGUAGE="$INPUT_LANGUAGE"
+          echo "Manual language selection: $DETECTED_LANGUAGE"
         else
           DETECTED_LANGUAGE=""
 
-          [[ -f package.json ]] && DETECTED_LANGUAGE="${DETECTED_LANGUAGE} nodejs"
-          [[ -f requirements.txt || -f pyproject.toml || -f setup.py ]] && DETECTED_LANGUAGE="${DETECTED_LANGUAGE} python"
-          [[ -f pom.xml || -f build.gradle || -f build.gradle.kts ]] && DETECTED_LANGUAGE="${DETECTED_LANGUAGE} java"
-          [[ -f composer.json ]] && DETECTED_LANGUAGE="${DETECTED_LANGUAGE} php"
+          # Detect Node.js
+          if [[ -f "package.json" ]]; then
+            DETECTED_LANGUAGE="${DETECTED_LANGUAGE} nodejs"
+          fi
 
+          # Detect Python
+          if [[ -f "requirements.txt" || -f "pyproject.toml" || -f "setup.py" ]]; then
+            DETECTED_LANGUAGE="${DETECTED_LANGUAGE} python"
+          fi
+
+          # Detect Java
+          if [[ -f "pom.xml" || -f "build.gradle" || -f "build.gradle.kts" ]]; then
+            DETECTED_LANGUAGE="${DETECTED_LANGUAGE} java"
+          fi
+
+          # Detect PHP
+          if [[ -f "composer.json" ]]; then
+            DETECTED_LANGUAGE="${DETECTED_LANGUAGE} php"
+          fi
+
+          # Remove leading/trailing whitespace
           DETECTED_LANGUAGE=$(echo "$DETECTED_LANGUAGE" | xargs)
 
+          # Check detection result
           if [[ -z "$DETECTED_LANGUAGE" ]]; then
-            echo "No supported language detected."
+            echo "ERROR: No supported language detected."
+            echo "Expected package.json, requirements.txt, pyproject.toml,"
+            echo "pom.xml, build.gradle, or composer.json."
             exit 1
           fi
 
+          # Check for multiple languages
           LANGUAGE_COUNT=$(echo "$DETECTED_LANGUAGE" | wc -w)
 
           if [[ "$LANGUAGE_COUNT" -gt 1 ]]; then
-            echo "Multiple languages detected: $DETECTED_LANGUAGE"
+            echo "ERROR: Multiple languages detected: $DETECTED_LANGUAGE"
             echo "Please specify the language manually."
             exit 1
           fi
+
+          DETECTED_LANGUAGE=$(echo "$DETECTED_LANGUAGE" | xargs)
         fi
 
+        echo "--------------------------------"
         echo "Detected language: $DETECTED_LANGUAGE"
+        echo "--------------------------------"
+
+        # Export output for the next workflow step
         echo "language=$DETECTED_LANGUAGE" >> "$GITHUB_OUTPUT"
