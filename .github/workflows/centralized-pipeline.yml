@@ -26,7 +26,7 @@ env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   GCP_REGION: asia-south1
   ARTIFACT_REGISTRY: application-repo
-  CLOUD_RUN_SERVICE: nodejs-application
+  CLOUD_RUN_SERVICE: ${{ github.ref == 'refs/heads/main' && 'nodejs-application' || 'nodejs-application-dev' }}
 
   WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
   WIF_SERVICE_ACCOUNT: ${{ vars.GCP_WIF_SERVICE_ACCOUNT }}
@@ -148,11 +148,8 @@ jobs:
   docker:
     name: Build and Scan Docker Image
     needs: security
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
-
-    if: >
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
@@ -194,12 +191,8 @@ jobs:
   deploy:
     name: GCP Deployment
     needs: docker
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && vars.ENABLE_DEPLOY == 'true' }}
     runs-on: ubuntu-latest
-
-    if: >
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      vars.ENABLE_DEPLOY == 'true'
 
     permissions:
       contents: read
