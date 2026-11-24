@@ -1,4 +1,3 @@
-
 name: Language Detection
 description: Automatically detect Node.js, Python, Java, or PHP application
 
@@ -102,9 +101,9 @@ runs:
           DETECTED_LANGUAGE=$(echo "$DETECTED_LANGUAGE" | xargs)
         fi
 
-        echo "--------------------------------"
+        
         echo "Detected language: $DETECTED_LANGUAGE"
-        echo "--------------------------------"
+        
 
         # Export output for the next workflow step
         echo "language=$DETECTED_LANGUAGE" >> "$GITHUB_OUTPUT"
