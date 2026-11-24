@@ -1,0 +1,197 @@
+
+name: Runtime Version Resolution
+description: Resolve runtime version using application input, configuration files, or centralized default
+
+inputs:
+  language:
+    description: Application language
+    required: true
+
+  app_directory:
+    description: Application directory
+    required: false
+    default: "."
+
+  requested_version:
+    description: Version explicitly provided by application
+    required: false
+    default: ""
+
+  default_version:
+    description: Centralized default runtime version
+    required: true
+
+outputs:
+  resolved_version:
+    description: Final runtime version
+    value: ${{ steps.resolve.outputs.version }}
+
+runs:
+  using: composite
+
+  steps:
+    - name: Resolve runtime version
+      id: resolve
+      shell: bash
+      env:
+        LANGUAGE: ${{ inputs.language }}
+        APP_DIRECTORY: ${{ inputs.app_directory }}
+        REQUESTED_VERSION: ${{ inputs.requested_version }}
+        DEFAULT_VERSION: ${{ inputs.default_version }}
+
+      run: |
+        set -euo pipefail
+
+        APP_DIR="${GITHUB_WORKSPACE}/${APP_DIRECTORY}"
+
+        if [ ! -d "$APP_DIR" ]; then
+          echo "Application directory not found: $APP_DIR"
+          exit 1
+        fi
+
+        detected_version=""
+
+        echo "Resolving version for: $LANGUAGE"
+
+        case "$LANGUAGE" in
+
+          nodejs)
+            if [ -f "$APP_DIR/.nvmrc" ]; then
+              detected_version=$(tr -d '[:space:]' < "$APP_DIR/.nvmrc")
+              detected_version="${detected_version#v}"
+
+            elif [ -f "$APP_DIR/.node-version" ]; then
+              detected_version=$(tr -d '[:space:]' < "$APP_DIR/.node-version")
+              detected_version="${detected_version#v}"
+
+            elif [ -f "$APP_DIR/package.json" ]; then
+              detected_version=$(node -e "
+                const p = require(process.argv[1]);
+                const v = p.engines?.node || '';
+                if (/^[0-9]+(\.[0-9]+){0,2}$/.test(v)) {
+                  console.log(v);
+                }
+              " "$APP_DIR/package.json")
+            fi
+            ;;
+
+          python)
+            if [ -f "$APP_DIR/.python-version" ]; then
+              detected_version=$(tr -d '[:space:]' < "$APP_DIR/.python-version")
+
+            elif [ -f "$APP_DIR/pyproject.toml" ]; then
+              detected_version=$(python3 - "$APP_DIR/pyproject.toml" <<'PY'
+        import re
+        import sys
+
+        content = open(sys.argv[1], encoding="utf-8").read()
+
+        patterns = [
+            r'requires-python\s*=\s*["\'](?:==|~=)?(\d+\.\d+(?:\.\d+)?)["\']',
+            r'python\s*=\s*["\'](?:==|~=)?(\d+\.\d+(?:\.\d+)?)["\']'
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                print(match.group(1))
+                break
+        PY
+              )
+            fi
+            ;;
+
+          java)
+            if [ -f "$APP_DIR/.java-version" ]; then
+              detected_version=$(tr -d '[:space:]' < "$APP_DIR/.java-version")
+
+            elif [ -f "$APP_DIR/pom.xml" ]; then
+              detected_version=$(python3 - "$APP_DIR/pom.xml" <<'PY'
+        import re
+        import sys
+
+        content = open(sys.argv[1], encoding="utf-8").read()
+
+        patterns = [
+            r'<maven\.compiler\.release>\s*(\d+)\s*</maven\.compiler\.release>',
+            r'<maven\.compiler\.source>\s*(\d+)\s*</maven\.compiler\.source>',
+            r'<java\.version>\s*(\d+)\s*</java\.version>'
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                print(match.group(1))
+                break
+        PY
+              )
+
+            elif [ -f "$APP_DIR/build.gradle" ] || [ -f "$APP_DIR/build.gradle.kts" ]; then
+              GRADLE_FILE="$APP_DIR/build.gradle"
+
+              [ -f "$APP_DIR/build.gradle.kts" ] && GRADLE_FILE="$APP_DIR/build.gradle.kts"
+
+              detected_version=$(python3 - "$GRADLE_FILE" <<'PY'
+        import re
+        import sys
+
+        content = open(sys.argv[1], encoding="utf-8").read()
+
+        patterns = [
+            r'JavaLanguageVersion\.of\(\s*(\d+)\s*\)',
+            r'JavaVersion\.VERSION_(\d+)',
+            r'sourceCompatibility\s*=\s*["\'](?:VERSION_)?(\d+)["\']'
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                print(match.group(1))
+                break
+        PY
+              )
+            fi
+            ;;
+
+          php)
+            if [ -f "$APP_DIR/.php-version" ]; then
+              detected_version=$(tr -d '[:space:]' < "$APP_DIR/.php-version")
+
+            elif [ -f "$APP_DIR/composer.json" ]; then
+              detected_version=$(node -e "
+                const p = require(process.argv[1]);
+                const v = p.config?.platform?.php || '';
+                if (/^[0-9]+(\.[0-9]+){0,2}$/.test(v)) {
+                  console.log(v);
+                }
+              " "$APP_DIR/composer.json")
+            fi
+            ;;
+
+          *)
+            echo "Unsupported language: $LANGUAGE"
+            exit 1
+            ;;
+        esac
+
+        # Priority 1: Explicit application version
+        if [ -n "$REQUESTED_VERSION" ]; then
+          resolved_version="$REQUESTED_VERSION"
+          source="Application input"
+
+        # Priority 2: Detected application version
+        elif [ -n "$detected_version" ]; then
+          resolved_version="$detected_version"
+          source="Application configuration file"
+
+        # Priority 3: Centralized default
+        else
+          resolved_version="$DEFAULT_VERSION"
+          source="Centralized default"
+        fi
+
+        echo "Detected version: ${detected_version:-Not found}"
+        echo "Version source: $source"
+        echo "Resolved version: $resolved_version"
+
+        echo "version=$resolved_version" >> "$GITHUB_OUTPUT"

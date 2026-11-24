@@ -17,40 +17,44 @@ on:
         default: "."
 
       node_version:
-        description: "Node.js version"
+        description: "Optional Node.js version override"
         required: false
         type: string
-        default: "22"
+        default: ""
 
       python_version:
-        description: "Python version"
+        description: "Optional Python version override"
         required: false
         type: string
-        default: "3.12"
+        default: ""
 
       java_version:
-        description: "Java version"
+        description: "Optional Java version override"
         required: false
         type: string
-        default: "17"
+        default: ""
 
       php_version:
-        description: "PHP version"
+        description: "Optional PHP version override"
         required: false
         type: string
-        default: "8.3"
+        default: ""
 
     outputs:
       detected_language:
-        description: "Detected application language"
+        description: Detected application language
         value: ${{ jobs.detect.outputs.language }}
+
+      resolved_version:
+        description: Resolved runtime version
+        value: ${{ jobs.resolve-version.outputs.version }}
 
 permissions:
   contents: read
 
 jobs:
 
-#Detect language
+# Detect application language
 
   detect:
     name: Detect Application Language
@@ -70,11 +74,36 @@ jobs:
           language: ${{ inputs.language }}
           app_directory: ${{ inputs.app_directory }}
 
+# Resolve runtime version
+
+  resolve-version:
+    name: Resolve Runtime Version
+    needs: detect
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.version.outputs.resolved_version }}
+
+    steps:
+      - name: Checkout Application Repository
+        uses: actions/checkout@v4
+
+      - name: Resolve application runtime version
+        id: version
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/version-resolution@develop
+        with:
+          language: ${{ needs.detect.outputs.language }}
+          app_directory: ${{ inputs.app_directory }}
+
+          requested_version: ${{ needs.detect.outputs.language == 'nodejs' && inputs.node_version || needs.detect.outputs.language == 'python' && inputs.python_version || needs.detect.outputs.language == 'java' && inputs.java_version || needs.detect.outputs.language == 'php' && inputs.php_version || '' }}
+
+          default_version: ${{ needs.detect.outputs.language == 'nodejs' && '22' || needs.detect.outputs.language == 'python' && '3.12' || needs.detect.outputs.language == 'java' && '17' || needs.detect.outputs.language == 'php' && '8.3' || '' }}
+
 # Nodejs build and test
 
   nodejs-test:
     name: Node.js Build and Test
-    needs: detect
+    needs: [detect, resolve-version]
     if: needs.detect.outputs.language == 'nodejs'
     runs-on: ubuntu-latest
 
@@ -85,14 +114,14 @@ jobs:
       - name: Run Node.js Tests
         uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/nodejs-test@develop
         with:
-          node_version: ${{ inputs.node_version }}
+          node_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
 # Python build and test
 
   python-test:
     name: Python Build and Test
-    needs: detect
+    needs: [detect, resolve-version]
     if: needs.detect.outputs.language == 'python'
     runs-on: ubuntu-latest
 
@@ -103,14 +132,14 @@ jobs:
       - name: Run Python Tests
         uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/python-test@develop
         with:
-          python_version: ${{ inputs.python_version }}
+          python_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
 # Java build and test
 
   java-test:
     name: Java Build and Test
-    needs: detect
+    needs: [detect, resolve-version]
     if: needs.detect.outputs.language == 'java'
     runs-on: ubuntu-latest
 
@@ -121,14 +150,14 @@ jobs:
       - name: Run Java Tests
         uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/java-test@develop
         with:
-          java_version: ${{ inputs.java_version }}
+          java_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
-# Php build and test
+# PHP build and test
 
   php-test:
     name: PHP Build and Test
-    needs: detect
+    needs: [detect, resolve-version]
     if: needs.detect.outputs.language == 'php'
     runs-on: ubuntu-latest
 
@@ -139,5 +168,5 @@ jobs:
       - name: Run PHP Tests
         uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/php-test@develop
         with:
-          php_version: ${{ inputs.php_version }}
+          php_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
