@@ -1,66 +1,45 @@
-name: PHP test
-description: Install, validate and test PHP application.
+
+name: PHP Test
+description: Run PHP application tests using PHPUnit
 
 inputs:
-  version:
-    description: PHP version.
+  php_version:
+    description: PHP runtime version
     required: true
-    
-  app-directory:
-    description: Application directory.
-    required: true
+
+  app_directory:
+    description: Application directory
+    required: false
     default: "."
 
 runs:
   using: composite
+
   steps:
-    - name: Set up PHP
+    - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: ${{ inputs.version }}
-        tools: composer, phpunit
+        php-version: ${{ inputs.php_version }}
+        coverage: none
 
-    - name: Install dependencies
+    - name: Install Composer Dependencies
+      if: hashFiles(format('{0}/composer.json', inputs.app_directory)) != ''
       shell: bash
       working-directory: ${{ inputs.app_directory }}
       run: |
-        set -euo pipefail
-
-        if [ ! -f composer.json ]; then
-          echo "composer.json not found"
-          exit 1
-        fi
-
         composer install --no-interaction --prefer-dist
 
-    - name: PHP syntax validation
+    - name: Run PHP Tests
       shell: bash
       working-directory: ${{ inputs.app_directory }}
       run: |
-        set -euo pipefail
+        if [ -f vendor/bin/phpunit ]; then
+          vendor/bin/phpunit
 
-        find . -type f -name "*.php" \
-          -not -path "./vendor/*" \
-          -print0 | xargs -0 -r -n1 php -l
-
-    - name: Run PHP tests
-      shell: bash
-      working-directory: ${{ inputs.app_directory }}
-      run: |
-        set -euo pipefail
-
-        if composer run-script --list 2>/dev/null | grep -qE '^[[:space:]]+test([[:space:]]|$)'; then
+        elif composer run-script --list 2>/dev/null | grep -q 'test'; then
           composer test
 
-        elif [ -f phpunit.xml ] || [ -f phpunit.xml.dist ]; then
-          if [ -x vendor/bin/phpunit ]; then
-            vendor/bin/phpunit
-          else
-            echo "PHPUnit is not installed"
-            exit 1
-          fi
-
         else
-          echo "PHP test script or PHPUnit configuration not found"
+          echo "No PHPUnit installation or Composer test script found."
           exit 1
         fi

@@ -1,0 +1,37 @@
+
+name: Java Build
+description: Compile and package Java application
+
+inputs:
+  java_version:
+    required: true
+  app_directory:
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java_version }}
+
+    - name: Build Maven application
+      if: hashFiles(format('{0}/pom.xml', inputs.app_directory)) != ''
+      shell: bash
+      working-directory: ${{ inputs.app_directory }}
+      run: mvn -B -DskipTests package
+
+    - name: Build Gradle application
+      if: hashFiles(format('{0}/build.gradle', inputs.app_directory)) != '' || hashFiles(format('{0}/build.gradle.kts', inputs.app_directory)) != ''
+      shell: bash
+      working-directory: ${{ inputs.app_directory }}
+      run: |
+        if [ -f gradlew ]; then
+          chmod +x gradlew
+          ./gradlew build -x test
+        else
+          gradle build -x test
+        fi

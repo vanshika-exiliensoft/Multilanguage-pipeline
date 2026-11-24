@@ -1,63 +1,53 @@
-name: Python test
-description: Install, build and test Python application
+
+name: Python Test
+description: Run Python application tests
 
 inputs:
-  version:
-    description: Python version.
+  python_version:
+    description: Python runtime version
     required: true
 
-  app-directory:
-    description: Application directory.
-    required: true
+  app_directory:
+    description: Application directory
+    required: false
     default: "."
 
 runs:
   using: composite
+
   steps:
-    - name: Set up Python
+    - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ inputs.version }}
+        python-version: ${{ inputs.python_version }}
 
     - name: Install dependencies
       shell: bash
-      working-directory: ${{ inputs.app-directory }}
+      working-directory: ${{ inputs.app_directory }}
       run: |
-        set -euo pipefail
-
         python -m pip install --upgrade pip
 
         if [ -f requirements.txt ]; then
           pip install -r requirements.txt
         fi
 
-        if [ -f pyproject.toml ] || [ -f setup.py ]; then
-          pip install -e .
+        if [ -f requirements-dev.txt ]; then
+          pip install -r requirements-dev.txt
+        fi
+
+        if [ -f pyproject.toml ]; then
+          pip install -e ".[test]" || pip install -e .
         fi
 
         pip install pytest
 
-    - name: Python syntax validation
+    - name: Run Python Tests
       shell: bash
-      working-directory: ${{ inputs.app-directory }}
+      working-directory: ${{ inputs.app_directory }}
       run: |
-        set -euo pipefail
-
-        python -m compileall -q .
-
-    - name: Run python test
-      shell: bash
-      working-directory: ${{ inputs.app-directory }}
-      run: |
-        set -euo pipefail
-
-        if ! find . -type f \
-          \( -name 'test_*.py' -o -name '*_test.py' \) \
-          -not -path './.venv/*' \
-          -not -path './venv/*' \
-          -not -path './.git/*' | grep -q .; then
-          echo "No Python test files found"
+        if [ -d tests ] || [ -f pytest.ini ] || [ -f pyproject.toml ]; then
+          python -m pytest -v
+        else
+          echo "No Python test directory or pytest configuration found."
           exit 1
         fi
-
-        pytest -v

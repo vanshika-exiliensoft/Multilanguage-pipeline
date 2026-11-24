@@ -1,0 +1,24 @@
+
+name: PHP Build
+description: Install dependencies and prepare PHP application
+
+inputs:
+  php_version:
+    required: true
+  app_directory:
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php_version }}
+
+    - name: Install Composer dependencies
+      if: hashFiles(format('{0}/composer.json', inputs.app_directory)) != ''
+      shell: bash
+      working-directory: ${{ inputs.app_directory }}
+      run: composer install --no-interaction --prefer-dist

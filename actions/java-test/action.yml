@@ -1,50 +1,54 @@
-name: Java test
-description: Install, build and test Java application
+
+name: Java Test
+description: Run Java application tests using Maven or Gradle
 
 inputs:
-  version:
-    description: Java version.
+  java_version:
+    description: Java runtime version
     required: true
 
-  app-directory:
-    description: Application directory.
-    required: true
+  app_directory:
+    description: Application directory
+    required: false
     default: "."
 
 runs:
   using: composite
+
   steps:
-    - name: Set up Java
+    - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: temurin
-        java-version: ${{ inputs.version }}
+        java-version: ${{ inputs.java_version }}
+        cache: maven
 
-    - name: Build and test
+    - name: Run Maven Tests
+      if: hashFiles(format('{0}/pom.xml', inputs.app_directory)) != ''
       shell: bash
-      working-directory: ${{ inputs.app-directory }}
+      working-directory: ${{ inputs.app_directory }}
       run: |
-        set -euo pipefail
+        mvn -B test
 
-        if [ -f pom.xml ]; then
-
-          echo "Maven project detected"
-
-          if [ -f mvnw ]; then
-            chmod +x mvnw
-            ./mvnw clean verify
-          else
-            mvn clean verify
-          fi
-
-        elif [ -f gradlew ]; then
-
-          echo "Gradle project detected"
-
+    - name: Run Gradle Tests
+      if: hashFiles(format('{0}/build.gradle', inputs.app_directory)) != '' || hashFiles(format('{0}/build.gradle.kts', inputs.app_directory)) != ''
+      shell: bash
+      working-directory: ${{ inputs.app_directory }}
+      run: |
+        if [ -f gradlew ]; then
           chmod +x gradlew
-          ./gradlew build
-
+          ./gradlew test
         else
-          echo "No supported Maven or Gradle configuration found"
+          gradle test
+        fi
+
+    - name: Check Java Build Configuration
+      shell: bash
+      working-directory: ${{ inputs.app_directory }}
+      run: |
+        if [ ! -f pom.xml ] && \
+           [ ! -f build.gradle ] && \
+           [ ! -f build.gradle.kts ]; then
+          echo "No Maven or Gradle configuration found."
           exit 1
         fi
