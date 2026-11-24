@@ -16,29 +16,13 @@ on:
         type: string
         default: "."
 
-      node_version:
-        description: "Optional Node.js version override"
+      
+      version:
+        description: "Optional application runtime version"
         required: false
         type: string
         default: ""
 
-      python_version:
-        description: "Optional Python version override"
-        required: false
-        type: string
-        default: ""
-
-      java_version:
-        description: "Optional Java version override"
-        required: false
-        type: string
-        default: ""
-
-      php_version:
-        description: "Optional PHP version override"
-        required: false
-        type: string
-        default: ""
 
     outputs:
       detected_language:
@@ -95,7 +79,7 @@ jobs:
           language: ${{ needs.detect.outputs.language }}
           app_directory: ${{ inputs.app_directory }}
 
-          requested_version: ${{ needs.detect.outputs.language == 'nodejs' && inputs.node_version || needs.detect.outputs.language == 'python' && inputs.python_version || needs.detect.outputs.language == 'java' && inputs.java_version || needs.detect.outputs.language == 'php' && inputs.php_version || '' }}
+          requested_version: ${{ inputs.version }}
 
           default_version: ${{ needs.detect.outputs.language == 'nodejs' && '22' || needs.detect.outputs.language == 'python' && '3.12' || needs.detect.outputs.language == 'java' && '17' || needs.detect.outputs.language == 'php' && '8.3' || '' }}
 
