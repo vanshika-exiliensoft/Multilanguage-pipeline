@@ -18,7 +18,7 @@ on:
 
       
       version:
-        description: "Optional application runtime version"
+        description: "Optional runtime version override"
         required: false
         type: string
         default: ""
