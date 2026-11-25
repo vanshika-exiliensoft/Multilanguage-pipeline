@@ -1,4 +1,3 @@
-
 name: Centralized Multi-Language Pipeline
 
 on:
@@ -37,7 +36,6 @@ permissions:
 jobs:
 
 # Detect application language
-
   detect:
     name: Detect Application Language
     runs-on: ubuntu-latest
@@ -56,7 +54,6 @@ jobs:
           app_directory: ${{ inputs.app_directory }}
 
 # Resolve runtime version
-
   resolve-version:
     name: Resolve Runtime Version
     needs: detect
@@ -75,176 +72,19 @@ jobs:
           language: ${{ needs.detect.outputs.language }}
           app_directory: ${{ inputs.app_directory }}
           requested_version: ${{ inputs.version }}
-
           default_version: ${{ needs.detect.outputs.language == 'nodejs' && '22' || needs.detect.outputs.language == 'python' && '3.12' || needs.detect.outputs.language == 'java' && '17' || needs.detect.outputs.language == 'php' && '8.3' || '' }}
 
-# Nodejs build
-
-  nodejs-build:
-    name: Node.js Build
-    needs: [detect, resolve-version]
-    if: needs.detect.outputs.language == 'nodejs'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Node.js Application
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/nodejs-build@develop
-        with:
-          node_version: ${{ needs.resolve-version.outputs.version }}
-          app_directory: ${{ inputs.app_directory }}
-
-# Nodejs test
-
-  nodejs-test:
-    name: Node.js Test
-    needs: [detect, resolve-version, nodejs-build]
-    if: needs.detect.outputs.language == 'nodejs'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Test Node.js Application
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/nodejs-test@develop
-        with:
-          node_version: ${{ needs.resolve-version.outputs.version }}
-          app_directory: ${{ inputs.app_directory }}
-
-# Python build
-
-  python-build:
-    name: Python Build
-    needs: [detect, resolve-version]
-    if: needs.detect.outputs.language == 'python'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Python Application
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/python-build@develop
-        with:
-          python_version: ${{ needs.resolve-version.outputs.version }}
-          app_directory: ${{ inputs.app_directory }}
-
-# Python test
-
-  python-test:
-    name: Python Test
-    needs: [detect, resolve-version, python-build]
-    if: needs.detect.outputs.language == 'python'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Test Python Application
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/python-test@develop
-        with:
-          python_version: ${{ needs.resolve-version.outputs.version }}
-          app_directory: ${{ inputs.app_directory }}
-
-# Java build
-
-  java-build:
-    name: Java Build
-    needs: [detect, resolve-version]
-    if: needs.detect.outputs.language == 'java'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Java Application
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/java-build@develop
-        with:
-          java_version: ${{ needs.resolve-version.outputs.version }}
-          app_directory: ${{ inputs.app_directory }}
-
-# Java test
-
-  java-test:
-    name: Java Test
-    needs: [detect, resolve-version, java-build]
-    if: needs.detect.outputs.language == 'java'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Test Java Application
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/java-test@develop
-        with:
-          java_version: ${{ needs.resolve-version.outputs.version }}
-          app_directory: ${{ inputs.app_directory }}
-
-# Php build
-
-  php-build:
-    name: PHP Build
-    needs: [detect, resolve-version]
-    if: needs.detect.outputs.language == 'php'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build PHP Application
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/php-build@develop
-        with:
-          php_version: ${{ needs.resolve-version.outputs.version }}
-          app_directory: ${{ inputs.app_directory }}
-
-# Php test
-
-  php-test:
-    name: PHP Test
-    needs: [detect, resolve-version, php-build]
-    if: needs.detect.outputs.language == 'php'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Test PHP Application
-        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/php-test@develop
-        with:
-          php_version: ${{ needs.resolve-version.outputs.version }}
-          app_directory: ${{ inputs.app_directory }}
-
-# Semantic release
-
+# Semantic Release
   semantic-release:
     name: Semantic Release
-
-    needs:
-      - detect
-      - resolve-version
-      - nodejs-build
-      - nodejs-test
-      - python-build
-      - python-test
-      - java-build
-      - java-test
-      - php-build
-      - php-test
+    needs: [detect, resolve-version]
 
     if: >-
-      always() &&
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      needs.detect.result == 'success' &&
-      needs.resolve-version.result == 'success' &&
-      !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled') &&
-      (
-        needs.nodejs-test.result == 'success' ||
-        needs.python-test.result == 'success' ||
-        needs.java-test.result == 'success' ||
-        needs.php-test.result == 'success'
-      )
+      ${{
+        github.event_name == 'push' &&
+        needs.detect.result == 'success' &&
+        needs.resolve-version.result == 'success'
+      }}
 
     runs-on: ubuntu-latest
 
@@ -262,7 +102,7 @@ jobs:
       - name: Setup Node.js for Semantic Release
         uses: actions/setup-node@v4
         with:
-          node-version: "26"
+          node-version: "22"
 
       - name: Install Semantic Release
         run: |
@@ -276,3 +116,131 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
+
+# Nodejs Build
+  nodejs-build:
+    name: Node.js Build
+    needs: [detect, resolve-version]
+    if: needs.detect.outputs.language == 'nodejs'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Node.js Application
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/nodejs-build@develop
+        with:
+          node_version: ${{ needs.resolve-version.outputs.version }}
+          app_directory: ${{ inputs.app_directory }}
+
+# Nodejs Test
+  nodejs-test:
+    name: Node.js Test
+    needs: [detect, resolve-version, nodejs-build]
+    if: needs.detect.outputs.language == 'nodejs'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test Node.js Application
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/nodejs-test@develop
+        with:
+          node_version: ${{ needs.resolve-version.outputs.version }}
+          app_directory: ${{ inputs.app_directory }}
+
+# Python build
+  python-build:
+    name: Python Build
+    needs: [detect, resolve-version]
+    if: needs.detect.outputs.language == 'python'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Python Application
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/python-build@develop
+        with:
+          python_version: ${{ needs.resolve-version.outputs.version }}
+          app_directory: ${{ inputs.app_directory }}
+
+# Python test
+  python-test:
+    name: Python Test
+    needs: [detect, resolve-version, python-build]
+    if: needs.detect.outputs.language == 'python'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test Python Application
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/python-test@develop
+        with:
+          python_version: ${{ needs.resolve-version.outputs.version }}
+          app_directory: ${{ inputs.app_directory }}
+
+# Java build
+  java-build:
+    name: Java Build
+    needs: [detect, resolve-version]
+    if: needs.detect.outputs.language == 'java'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Java Application
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/java-build@develop
+        with:
+          java_version: ${{ needs.resolve-version.outputs.version }}
+          app_directory: ${{ inputs.app_directory }}
+
+# Java test
+  java-test:
+    name: Java Test
+    needs: [detect, resolve-version, java-build]
+    if: needs.detect.outputs.language == 'java'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test Java Application
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/java-test@develop
+        with:
+          java_version: ${{ needs.resolve-version.outputs.version }}
+          app_directory: ${{ inputs.app_directory }}
+
+# PHP build
+  php-build:
+    name: PHP Build
+    needs: [detect, resolve-version]
+    if: needs.detect.outputs.language == 'php'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build PHP Application
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/php-build@develop
+        with:
+          php_version: ${{ needs.resolve-version.outputs.version }}
+          app_directory: ${{ inputs.app_directory }}
+
+# PHP test
+  php-test:
+    name: PHP Test
+    needs: [detect, resolve-version, php-build]
+    if: needs.detect.outputs.language == 'php'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test PHP Application
+        uses: vanshika-exiliensoft/Multilanguage-pipeline/actions/php-test@develop
+        with:
+          php_version: ${{ needs.resolve-version.outputs.version }}
+          app_directory: ${{ inputs.app_directory }}
