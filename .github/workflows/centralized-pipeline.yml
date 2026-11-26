@@ -74,7 +74,8 @@ jobs:
           requested_version: ${{ inputs.version }}
           default_version: ${{ needs.detect.outputs.language == 'nodejs' && '22' || needs.detect.outputs.language == 'python' && '3.12' || needs.detect.outputs.language == 'java' && '17' || needs.detect.outputs.language == 'php' && '8.3' || '' }}
 
-# Semantic release
+
+  # Semantic Release
   semantic-release:
     name: Semantic Release
     needs: [detect, resolve-version]
@@ -102,7 +103,12 @@ jobs:
       - name: Setup Node.js for Semantic Release
         uses: actions/setup-node@v4
         with:
-          node-version: "26.13.0"
+          node-version: '26.13.0'
+
+      - name: Verify Node.js Version
+        run: |
+          node --version
+          npm --version
 
       - name: Install Semantic Release
         run: |
@@ -112,15 +118,11 @@ jobs:
             @semantic-release/release-notes-generator \
             @semantic-release/github
 
-      - name: Verify Node.js Version
-        run: |
-          node --version
-          npm --version
-
-      - name: Publish Semantic Release
+      - name: Run Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
+
 
 # Nodejs Build
   nodejs-build:
