@@ -75,7 +75,7 @@ jobs:
           default_version: ${{ needs.detect.outputs.language == 'nodejs' && '22' || needs.detect.outputs.language == 'python' && '3.12' || needs.detect.outputs.language == 'java' && '17' || needs.detect.outputs.language == 'php' && '8.3' || '' }}
 
 
-  # Semantic Release
+
   semantic-release:
     name: Semantic Release
     needs: [detect, resolve-version]
@@ -83,7 +83,6 @@ jobs:
     if: >-
       ${{
         github.event_name == 'push' &&
-        github.ref == 'refs/heads/develop' &&
         needs.detect.result == 'success' &&
         needs.resolve-version.result == 'success'
       }}
@@ -101,15 +100,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js for Semantic Release
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '26.13.0'
-
-      - name: Verify Node.js Version
-        run: |
-          node --version
-          npm --version
 
       - name: Install Semantic Release
         run: |
@@ -129,7 +123,15 @@ jobs:
   nodejs-build:
     name: Node.js Build
     needs: [detect, resolve-version, semantic-release]
-    if: needs.detect.outputs.language == 'nodejs'
+    if: >-
+      ${{
+        always() &&
+        needs.detect.result == 'success' &&
+        needs.resolve-version.result == 'success' &&
+        needs.detect.outputs.language == 'nodejs' &&
+        (needs.semantic-release.result == 'success' ||
+         needs.semantic-release.result == 'skipped')
+      }}
     runs-on: ubuntu-latest
 
     steps:
