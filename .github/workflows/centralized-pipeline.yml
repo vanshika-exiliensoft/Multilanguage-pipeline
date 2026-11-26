@@ -35,7 +35,7 @@ permissions:
 
 jobs:
 
-# Detect application language
+  # Detect application language
   detect:
     name: Detect Application Language
     runs-on: ubuntu-latest
@@ -53,7 +53,7 @@ jobs:
           language: ${{ inputs.language }}
           app_directory: ${{ inputs.app_directory }}
 
-# Resolve runtime version
+  # Resolve runtime version
   resolve-version:
     name: Resolve Runtime Version
     needs: detect
@@ -74,17 +74,66 @@ jobs:
           requested_version: ${{ inputs.version }}
           default_version: ${{ needs.detect.outputs.language == 'nodejs' && '22' || needs.detect.outputs.language == 'python' && '3.12' || needs.detect.outputs.language == 'java' && '17' || needs.detect.outputs.language == 'php' && '8.3' || '' }}
 
+  # Trivy Security Scan
+  trivy-scan:
+    name: Trivy Security Scan
+    needs: [detect, resolve-version]
 
+    if: >-
+      ${{
+        needs.detect.result == 'success' &&
+        needs.resolve-version.result == 'success'
+      }}
 
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout Application Repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy Security Scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ inputs.app_directory }}
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: '1'
+          limit-severities-for-sarif: true
+
+      - name: Upload Trivy Results to GitHub Security
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-${{ needs.detect.outputs.language }}
+
+      - name: Upload Trivy Report as Artifact
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-security-report
+          path: trivy-results.sarif
+          retention-days: 30
+
+  # Semantic Release
   semantic-release:
     name: Semantic Release
-    needs: [detect, resolve-version]
+    needs: [detect, resolve-version, trivy-scan]
 
     if: >-
       ${{
         github.event_name == 'push' &&
         needs.detect.result == 'success' &&
-        needs.resolve-version.result == 'success'
+        needs.resolve-version.result == 'success' &&
+        needs.trivy-scan.result == 'success'
       }}
 
     runs-on: ubuntu-latest
@@ -118,20 +167,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
 
-
-# Nodejs Build
+  # Node.js Build
   nodejs-build:
     name: Node.js Build
-    needs: [detect, resolve-version, semantic-release]
+    needs: [detect, resolve-version, trivy-scan, semantic-release]
+
     if: >-
       ${{
         always() &&
         needs.detect.result == 'success' &&
         needs.resolve-version.result == 'success' &&
+        needs.trivy-scan.result == 'success' &&
         needs.detect.outputs.language == 'nodejs' &&
-        (needs.semantic-release.result == 'success' ||
-         needs.semantic-release.result == 'skipped')
+        (
+          needs.semantic-release.result == 'success' ||
+          needs.semantic-release.result == 'skipped'
+        )
       }}
+
     runs-on: ubuntu-latest
 
     steps:
@@ -143,7 +196,7 @@ jobs:
           node_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
-# Nodejs Test
+  # Node.js Test
   nodejs-test:
     name: Node.js Test
     needs: [detect, resolve-version, nodejs-build]
@@ -159,11 +212,24 @@ jobs:
           node_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
-# Python build
+  # Python Build
   python-build:
     name: Python Build
-    needs: [detect, resolve-version, semantic-release]
-    if: needs.detect.outputs.language == 'python'
+    needs: [detect, resolve-version, trivy-scan, semantic-release]
+
+    if: >-
+      ${{
+        always() &&
+        needs.detect.result == 'success' &&
+        needs.resolve-version.result == 'success' &&
+        needs.trivy-scan.result == 'success' &&
+        needs.detect.outputs.language == 'python' &&
+        (
+          needs.semantic-release.result == 'success' ||
+          needs.semantic-release.result == 'skipped'
+        )
+      }}
+
     runs-on: ubuntu-latest
 
     steps:
@@ -175,7 +241,7 @@ jobs:
           python_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
-# Python test
+  # Python Test
   python-test:
     name: Python Test
     needs: [detect, resolve-version, python-build]
@@ -191,11 +257,24 @@ jobs:
           python_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
-# Java build
+  # Java Build
   java-build:
     name: Java Build
-    needs: [detect, resolve-version, semantic-release]
-    if: needs.detect.outputs.language == 'java'
+    needs: [detect, resolve-version, trivy-scan, semantic-release]
+
+    if: >-
+      ${{
+        always() &&
+        needs.detect.result == 'success' &&
+        needs.resolve-version.result == 'success' &&
+        needs.trivy-scan.result == 'success' &&
+        needs.detect.outputs.language == 'java' &&
+        (
+          needs.semantic-release.result == 'success' ||
+          needs.semantic-release.result == 'skipped'
+        )
+      }}
+
     runs-on: ubuntu-latest
 
     steps:
@@ -207,7 +286,7 @@ jobs:
           java_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
-# Java test
+  # Java Test
   java-test:
     name: Java Test
     needs: [detect, resolve-version, java-build]
@@ -223,11 +302,24 @@ jobs:
           java_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
-# PHP build
+  # PHP Build
   php-build:
     name: PHP Build
-    needs: [detect, resolve-version, semantic-release]
-    if: needs.detect.outputs.language == 'php'
+    needs: [detect, resolve-version, trivy-scan, semantic-release]
+
+    if: >-
+      ${{
+        always() &&
+        needs.detect.result == 'success' &&
+        needs.resolve-version.result == 'success' &&
+        needs.trivy-scan.result == 'success' &&
+        needs.detect.outputs.language == 'php' &&
+        (
+          needs.semantic-release.result == 'success' ||
+          needs.semantic-release.result == 'skipped'
+        )
+      }}
+
     runs-on: ubuntu-latest
 
     steps:
@@ -239,7 +331,7 @@ jobs:
           php_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
 
-# PHP test
+  # PHP Test
   php-test:
     name: PHP Test
     needs: [detect, resolve-version, php-build]
