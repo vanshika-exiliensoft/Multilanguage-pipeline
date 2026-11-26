@@ -74,7 +74,7 @@ jobs:
           requested_version: ${{ inputs.version }}
           default_version: ${{ needs.detect.outputs.language == 'nodejs' && '22' || needs.detect.outputs.language == 'python' && '3.12' || needs.detect.outputs.language == 'java' && '17' || needs.detect.outputs.language == 'php' && '8.3' || '' }}
 
-# Semantic Release
+# Semantic release
   semantic-release:
     name: Semantic Release
     needs: [detect, resolve-version]
@@ -102,7 +102,7 @@ jobs:
       - name: Setup Node.js for Semantic Release
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26.13.0"
 
       - name: Install Semantic Release
         run: |
@@ -112,6 +112,11 @@ jobs:
             @semantic-release/release-notes-generator \
             @semantic-release/github
 
+      - name: Verify Node.js Version
+        run: |
+          node --version
+          npm --version
+
       - name: Publish Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -120,7 +125,7 @@ jobs:
 # Nodejs Build
   nodejs-build:
     name: Node.js Build
-    needs: [detect, resolve-version]
+    needs: [detect, resolve-version, semantic-release]
     if: needs.detect.outputs.language == 'nodejs'
     runs-on: ubuntu-latest
 
@@ -152,7 +157,7 @@ jobs:
 # Python build
   python-build:
     name: Python Build
-    needs: [detect, resolve-version]
+    needs: [detect, resolve-version, semantic-release]
     if: needs.detect.outputs.language == 'python'
     runs-on: ubuntu-latest
 
@@ -184,7 +189,7 @@ jobs:
 # Java build
   java-build:
     name: Java Build
-    needs: [detect, resolve-version]
+    needs: [detect, resolve-version, semantic-release]
     if: needs.detect.outputs.language == 'java'
     runs-on: ubuntu-latest
 
@@ -216,7 +221,7 @@ jobs:
 # PHP build
   php-build:
     name: PHP Build
-    needs: [detect, resolve-version]
+    needs: [detect, resolve-version, semantic-release]
     if: needs.detect.outputs.language == 'php'
     runs-on: ubuntu-latest
 
