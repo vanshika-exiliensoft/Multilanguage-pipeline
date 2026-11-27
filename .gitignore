@@ -1,0 +1,12 @@
+# Terraform downloaded providers and working directory
+**/.terraform/
+
+# Terraform state and plans
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+
+# Local Terraform variables
+terraform.tfvars
+terraform.tfvars.json
