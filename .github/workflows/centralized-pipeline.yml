@@ -21,6 +21,12 @@ on:
         type: string
         default: ""
 
+      deploy_to_aws:
+        description: "Enable Docker and AWS deployment for Node.js"
+        required: false
+        type: boolean
+        default: false
+
     outputs:
       detected_language:
         description: Detected application language
@@ -31,7 +37,10 @@ on:
         value: ${{ jobs.resolve-version.outputs.version }}
 
 permissions:
-  contents: read
+  contents: write
+  issues: write
+  pull-requests: write
+  security-events: write
 
 jobs:
 
@@ -131,6 +140,7 @@ jobs:
     if: >-
       ${{
         github.event_name == 'push' &&
+        github.ref == 'refs/heads/develop' &&
         needs.detect.result == 'success' &&
         needs.resolve-version.result == 'success' &&
         needs.trivy-scan.result == 'success'
@@ -346,3 +356,88 @@ jobs:
         with:
           php_version: ${{ needs.resolve-version.outputs.version }}
           app_directory: ${{ inputs.app_directory }}
+
+
+  # Docker Build, Image Scan, ECR Push and ECS Deployment
+  docker-aws-deploy:
+    name: Docker Build and AWS ECS Deployment
+    needs: [detect, trivy-scan, nodejs-test]
+
+    if: >-
+      ${{
+        github.event_name == 'push' &&
+        inputs.deploy_to_aws &&
+        needs.detect.outputs.language == 'nodejs' &&
+        needs.detect.result == 'success' &&
+        needs.trivy-scan.result == 'success' &&
+        needs.nodejs-test.result == 'success'
+      }}
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      AWS_REGION: ap-south-1
+      ECR_REPOSITORY: multilanguage-pipeline
+      ECS_CLUSTER: multilanguage-cluster
+      ECS_SERVICE: multilanguage-nodejs-service
+      IMAGE_TAG: sha-${{ github.sha }}-${{ github.run_number }}-${{ github.run_attempt }}
+      APP_DIRECTORY: ${{ inputs.app_directory }}
+
+    steps:
+      - name: Checkout Application Repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -t "$ECR_REPOSITORY:$IMAGE_TAG" \
+            "$APP_DIRECTORY"
+
+      - name: Scan Docker Image
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: multilanguage-pipeline:sha-${{ github.sha }}-${{ github.run_number }}-${{ github.run_attempt }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Configure AWS OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::864899835094:role/MultilanguageGitHubActionsRole
+          aws-region: ap-south-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push Docker Image to ECR
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker tag "$ECR_REPOSITORY:$IMAGE_TAG" \
+            "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+          docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Render ECS Task Definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ inputs.app_directory }}/task-definition.json
+          container-name: nodejs-app
+          image: ${{ steps.login-ecr.outputs.registry }}/multilanguage-pipeline:sha-${{ github.sha }}-${{ github.run_number }}-${{ github.run_attempt }}
+
+      - name: Deploy to ECS Fargate
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          cluster: multilanguage-cluster
+          service: multilanguage-nodejs-service
+          wait-for-service-stability: true
+
