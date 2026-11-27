@@ -140,7 +140,10 @@ jobs:
     if: >-
       ${{
         github.event_name == 'push' &&
-        github.ref == 'refs/heads/develop' &&
+        (
+          github.ref == 'refs/heads/develop' ||
+          github.ref == 'refs/heads/feat-docker-multicloud-deployment'
+        ) &&
         needs.detect.result == 'success' &&
         needs.resolve-version.result == 'success' &&
         needs.trivy-scan.result == 'success'
@@ -408,7 +411,7 @@ jobs:
             "$APP_DIRECTORY"
 
       - name: Scan Docker Image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: multilanguage-pipeline:sha-${{ github.sha }}-${{ github.run_number }}-${{ github.run_attempt }}
           format: table
