@@ -210,7 +210,16 @@ jobs:
   nodejs-test:
     name: Node.js Test
     needs: [detect, resolve-version, nodejs-build]
-    if: needs.detect.outputs.language == 'nodejs'
+
+    if: >-
+      ${{
+        always() &&
+        needs.detect.result == 'success' &&
+        needs.resolve-version.result == 'success' &&
+        needs.detect.outputs.language == 'nodejs' &&
+        needs.nodejs-build.result == 'success'
+      }}
+
     runs-on: ubuntu-latest
 
     steps:
@@ -364,14 +373,15 @@ jobs:
     needs: [detect, trivy-scan, nodejs-test]
 
     if: >-
-      ${{
-        github.event_name == 'push' &&
-        inputs.deploy_to_aws &&
-        needs.detect.outputs.language == 'nodejs' &&
-        needs.detect.result == 'success' &&
-        needs.trivy-scan.result == 'success' &&
-        needs.nodejs-test.result == 'success'
-      }}
+        ${{
+          always() &&
+          github.event_name == 'push' &&
+          inputs.deploy_to_aws == true &&
+          needs.detect.result == 'success' &&
+          needs.trivy-scan.result == 'success' &&
+          needs.nodejs-test.result == 'success' &&
+          needs.detect.outputs.language == 'nodejs'
+        }}
 
     runs-on: ubuntu-latest
 
